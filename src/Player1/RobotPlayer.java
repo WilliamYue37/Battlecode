@@ -1,5 +1,6 @@
-package examplefuncsplayer;
+package Player1;
 import battlecode.common.*;
+import java.util.*;
 
 public strictfp class RobotPlayer {
     static RobotController rc;
@@ -32,14 +33,14 @@ public strictfp class RobotPlayer {
 
         turnCount = 0;
 
-        System.out.println("I'm a " + rc.getType() + " and I just got created!");
+        // System.out.println("I'm a " + rc.getType() + " and I just got created!");
         while (true) {
             turnCount += 1;
             // Try/catch blocks stop unhandled exceptions, which cause your robot to explode
             try {
                 // Here, we've separated the controls into a different method for each RobotType.
                 // You can add the missing ones or rewrite this into your own control structure.
-                System.out.println("I'm a " + rc.getType() + "! Location " + rc.getLocation());
+                // System.out.println("I'm a " + rc.getType() + "! Location " + rc.getLocation());
                 switch (rc.getType()) {
                     case HQ:                 runHQ();                break;
                     case MINER:              runMiner();             break;
@@ -63,8 +64,24 @@ public strictfp class RobotPlayer {
     }
 
     static void runHQ() throws GameActionException {
-        for (Direction dir : directions)
-            tryBuild(RobotType.MINER, dir);
+        if (!rc.isReady()) return;
+
+        RobotInfo[] nearbyRobots = rc.senseNearbyRobots(rc.getCurrentSensorRadiusSquared(), rc.getTeam().opponent());
+        // System.out.println(nearbyRobots.length);
+        if (nearbyRobots.length > 0) {
+            Arrays.sort(nearbyRobots, new Comparator<RobotInfo>() {
+                public int compare(RobotInfo a, RobotInfo b) {
+                    return rc.getLocation().distanceSquaredTo(a.location)
+                         - rc.getLocation().distanceSquaredTo(b.location);
+                }
+            });
+
+            rc.shootUnit(nearbyRobots[0].ID);
+        } else {
+            for (Direction d : directions) {
+                if (tryBuild(RobotType.MINER, d)) break;
+            }
+        }
     }
 
     static void runMiner() throws GameActionException {
