@@ -122,7 +122,6 @@ public strictfp class RobotPlayer {
 
         MapLocation[] soupVision = soupVision();
         if (soupVision.length > 0) {
-            // System.out.println(1);
             if (rc.getSoupCarrying() == RobotType.MINER.soupLimit) {
                 gotoHQ = true;
             } else {
@@ -145,7 +144,7 @@ public strictfp class RobotPlayer {
 
                 for (Integer d : dirs) {
                     MapLocation go = rc.adjacentLocation(dir[d]);
-                    if (go == null) continue;
+                    if (!valid(go)) continue;
 
                     if (soupLocation.distanceSquaredTo(go) <= 2 && rc.canMineSoup(dir[d])) {
                         rc.mineSoup(dir[d]);
@@ -161,7 +160,6 @@ public strictfp class RobotPlayer {
             }
 
         } else {
-            // System.out.println(2);
             if (rc.getSoupCarrying() > 0) {
                 gotoHQ = true;
             } else {
@@ -170,7 +168,7 @@ public strictfp class RobotPlayer {
 
                 for (Integer d : shuffle) {
                     MapLocation go = rc.adjacentLocation(dir[d]);
-                    if (go == null) continue;
+                    if (!valid(go)) continue;
 
                     if (rc.canMove(dir[d]) && !rc.senseFlooding(go) && !vis[rows - 1 - go.y][go.x]) {
                         rc.move(dir[d]);
@@ -200,7 +198,7 @@ public strictfp class RobotPlayer {
 
             for (Integer d : dirs) {
                 MapLocation go = rc.adjacentLocation(dir[d]);
-                if (go == null) continue;
+                if (!valid(go)) continue;
 
                 if (hq.distanceSquaredTo(go) <= 2 && rc.canDepositSoup(dir[d])) {
                     rc.depositSoup(dir[d], rc.getSoupCarrying());
@@ -326,10 +324,14 @@ public strictfp class RobotPlayer {
     static void unblock() throws GameActionException {
         for (Direction d : dir) {
             MapLocation go = rc.adjacentLocation(d);
-            if (go != null && !vis[rows - 1 - go.y][go.x] && rc.canMove(d)) return;
+            if (valid(go) && !vis[rows - 1 - go.y][go.x] && rc.canMove(d)) return;
         }
 
         vis = new boolean[rows][cols];
+    }
+
+    static boolean valid(MapLocation loc) {
+        return loc != null && 0 <= rows - 1 - loc.y && rows - 1 - loc.y < rows && 0 <= loc.x && loc.x < cols;
     }
 }
 
