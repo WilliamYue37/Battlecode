@@ -11,6 +11,9 @@ public strictfp class RobotPlayer {
     static int turnCount;
     static boolean gotoHQ = false;
     static MapLocation hq;
+    static boolean rush = false;
+    static MapLocation rushLoc;
+    static boolean foundRush = false;
 
     static Direction[] dir = {
         Direction.NORTH,
@@ -22,8 +25,10 @@ public strictfp class RobotPlayer {
         Direction.WEST,
         Direction.NORTHWEST
     };
-    static int[] dx = {0, 1, 1, 1, 0, -1, -1, -1};
-    static int[] dy = {1, 1, 0, -1, -1, -1, 0, 1};
+
+    // static int[] dx = {0, 1, 1, 1, 0, -1, -1, -1};
+    // static int[] dy = {1, 1, 0, -1, -1, -1, 0, 1};
+
     static RobotType[] spawnedByMiner = {RobotType.REFINERY, RobotType.VAPORATOR, RobotType.DESIGN_SCHOOL,
             RobotType.FULFILLMENT_CENTER, RobotType.NET_GUN};
 
@@ -40,6 +45,7 @@ public strictfp class RobotPlayer {
         for (RobotInfo robot : nearbyRobots) {
             if (rc.senseRobot(robot.ID).type == RobotType.HQ) {
                 hq = robot.location;
+                break;
             }
         }
 
@@ -121,44 +127,87 @@ public strictfp class RobotPlayer {
         unblock();
 
         MapLocation[] soupVision = soupVision();
+
+        Transaction[] blockchain = rc.getBlock(rc.getRoundNum() - 1);
+        ArrayList<Transaction> oursList = new ArrayList<>();
+        for (Transaction t : blockchain) {
+            if (t.getMessage()[0] % 65557 == 0) {
+                oursList.add(t);
+            }
+        }
+        Transaction[] ours = oursList.toArray(new Transaction[0]);
+        Arrays.sort(ours, new Comparator<Transaction>() {
+            public int compare(Transaction a, Transaction b) {
+                MapLocation aLoc = new MapLocation(a.getMessage()[1] / (cols + 64), a.getMessage()[1] % (cols + 64));
+                MapLocation bLoc = new MapLocation(b.getMessage()[1] / (cols + 64), b.getMessage()[1] % (cols + 64));
+
+                return rc.getLocation().distanceSquaredTo(aLoc) - rc.getLocation().distanceSquaredTo(bLoc);
+            }
+        });
+        if (ours.length > 0) {
+            rush = true;
+            rushLoc = new MapLocation(ours[0].getMessage()[1] / (cols + 64), ours[0].getMessage()[1] % (cols + 64));
+            vis = new boolean[rows][cols];
+        }
+
+        System.out.println(rush);
+
+        Clock.yield();
+
         if (soupVision.length > 0) {
+            if (rush) {
+                rush = false;
+                rushLoc = null;
+            } else {
+                blockchain(soupVision[0]);
+            }
+
             if (rc.getSoupCarrying() == RobotType.MINER.soupLimit) {
+                // System.out.println(1);
+
                 gotoHQ = true;
             } else {
+                // System.out.println(2);
+                
                 MapLocation soupLocation = soupVision[0];
 
-                Integer[] dirs = {0, 1, 2, 3, 4, 5, 6, 7};
-                Arrays.sort(dirs, new Comparator<Integer> () {
-                    public int compare(Integer a, Integer b) {
-                        MapLocation adjA = rc.adjacentLocation(dir[a]), adjB = rc.adjacentLocation(dir[b]);
-                        if (adjA == null) {
-                            if (adjB == null) return 0;
-                            else return 1;
-                        } else {
-                            if (adjB == null) return -1;
-                            else return soupLocation.distanceSquaredTo(rc.adjacentLocation(dir[a])) 
-                                      - soupLocation.distanceSquaredTo(rc.adjacentLocation(dir[b]));
-                        }
-                    }
-                });
+                Direction[] dirs = sortDirs(soupLocation);
 
-                for (Integer d : dirs) {
-                    MapLocation go = rc.adjacentLocation(dir[d]);
+                for (Direction d : dirs) {
+                    MapLocation go = rc.adjacentLocation(d);
                     if (!valid(go)) continue;
 
-                    if (soupLocation.distanceSquaredTo(go) <= 2 && rc.canMineSoup(dir[d])) {
-                        rc.mineSoup(dir[d]);
+                    if (soupLocation.distanceSquaredTo(go) <= 2 && rc.canMineSoup(d)) {
+                        rc.mineSoup(d);
                         break;
                     }
 
-                    if (rc.canMove(dir[d]) && !rc.senseFlooding(go) && !vis[rows - 1 - go.y][go.x]) {
-                        rc.move(dir[d]);
+                    if (rc.canMove(d) && !rc.senseFlooding(go) && !vis[rows - 1 - go.y][go.x]) {
+                        rc.move(d);
                         vis[rows - 1 - go.y][go.x] = true;
                         break;
                     }
                 }
             }
+        } else if (rush) {
+            if (rc.getLocation().distanceSquaredTo(rushLoc) <= 2 && soupVision.length == 0) {
+                rush = false;
+                rushLoc = null;
+            } else {
 
+                Direction[] dirs = sortDirs(rushLoc);
+
+                for (Direction d : dirs) {
+                    MapLocation go = rc.adjacentLocation(d);
+                    if (!valid(go)) continue;
+
+                    if (rc.canMove(d) && !rc.senseFlooding(go) && !vis[rows - 1 - go.y][go.x]) {
+                        rc.move(d);
+                        vis[rows - 1 - go.y][go.x] = true;
+                        break;
+                    }
+                }
+            }
         } else {
             if (rc.getSoupCarrying() > 0) {
                 gotoHQ = true;
@@ -181,33 +230,20 @@ public strictfp class RobotPlayer {
         }
 
         if (gotoHQ) {
-            Integer[] dirs = {0, 1, 2, 3, 4, 5, 6, 7};
-            Arrays.sort(dirs, new Comparator<Integer> () {
-                public int compare(Integer a, Integer b) {
-                    MapLocation adjA = rc.adjacentLocation(dir[a]), adjB = rc.adjacentLocation(dir[b]);
-                    if (adjA == null) {
-                        if (adjB == null) return 0;
-                        else return 1;
-                    } else {
-                        if (adjB == null) return -1;
-                        else return hq.distanceSquaredTo(rc.adjacentLocation(dir[a])) 
-                                  - hq.distanceSquaredTo(rc.adjacentLocation(dir[b]));
-                    }
-                }
-            });
+            Direction[] dirs = sortDirs(hq);
 
-            for (Integer d : dirs) {
-                MapLocation go = rc.adjacentLocation(dir[d]);
+            for (Direction d : dirs) {
+                MapLocation go = rc.adjacentLocation(d);
                 if (!valid(go)) continue;
 
-                if (hq.distanceSquaredTo(go) <= 2 && rc.canDepositSoup(dir[d])) {
-                    rc.depositSoup(dir[d], rc.getSoupCarrying());
+                if (hq.distanceSquaredTo(go) <= 2 && rc.canDepositSoup(d)) {
+                    rc.depositSoup(d, rc.getSoupCarrying());
                     gotoHQ = false;
                     break;
                 }
-
-                if (rc.canMove(dir[d]) && !rc.senseFlooding(go) && !vis[rows - 1 - go.y][go.x]) {
-                    rc.move(dir[d]);
+                
+                if (rc.canMove(d) && !rc.senseFlooding(go) && !vis[rows - 1 - go.y][go.x]) {
+                    rc.move(d);
                     vis[rows - 1 - go.y][go.x] = true;
                     break;
                 }
@@ -309,22 +345,21 @@ public strictfp class RobotPlayer {
     }
 
 
-    static void tryBlockchain() throws GameActionException {
-        // if (turnCount < 3) {
-        //     int[] message = new int[7];
-        //     for (int i = 0; i < 7; i++) {
-        //         message[i] = 123;
-        //     }
-        //     if (rc.canSubmitTransaction(message, 10))
-        //         rc.submitTransaction(message, 10);
-        // }
-        // System.out.println(rc.getRoundMessages(turnCount-1));
+    static void blockchain(MapLocation soup) throws GameActionException {
+        int[] message = new int[7];
+        message[0] = rc.getRoundNum() * 65557;
+        message[1] = soup.x * (cols + 64) + soup.y;
+
+        // if (rc.getTeamSoup() > 0) rc.submitTransaction(message, min(rc.getTeamSoup(), 15));
+        if (rc.getTeamSoup() > 0) {
+            rc.submitTransaction(message, 1);
+        }
     }
 
     static void unblock() throws GameActionException {
         for (Direction d : dir) {
             MapLocation go = rc.adjacentLocation(d);
-            if (valid(go) && !vis[rows - 1 - go.y][go.x] && rc.canMove(d)) return;
+            if (valid(go) && !vis[rows - 1 - go.y][go.x] && rc.canMove(d) && !rc.senseFlooding(go)) return;
         }
 
         vis = new boolean[rows][cols];
@@ -332,6 +367,27 @@ public strictfp class RobotPlayer {
 
     static boolean valid(MapLocation loc) {
         return loc != null && 0 <= rows - 1 - loc.y && rows - 1 - loc.y < rows && 0 <= loc.x && loc.x < cols;
+    }
+
+    static Direction[] sortDirs(MapLocation source) throws GameActionException {
+        Direction[] dirs = new Direction[8];
+        for (int d = 0; d < 8; ++d) dirs[d] = dir[d];
+
+        Arrays.sort(dirs, new Comparator<Direction> () {
+            public int compare(Direction a, Direction b) {
+                MapLocation adjA = rc.adjacentLocation(a), adjB = rc.adjacentLocation(b);
+                if (!valid(adjA)) {
+                    if (!valid(adjB)) return 0;
+                    else return 1;
+                } else {
+                    if (!valid(adjB)) return -1;
+                    else return source.distanceSquaredTo(adjA) 
+                              - source.distanceSquaredTo(adjB);
+                }
+            }
+        });
+
+        return dirs;
     }
 }
 
@@ -367,4 +423,19 @@ new idea
 miners do their own independent dfs, but once there are no available squares left to move to, reset vis
 and continue searching
 
+next step
+maybe have a second 'true' vis to avoid miners retracing the same paths they've already gone to
+building refineries and putting their locations in the blockchain to limit miner travel time
+put soup sites on blockchain
+sense elevation to avoid being flooded
+if miner is trapped, send drone
+
+each miner submits its own transactions
+we know it's our transaction if it's divisible by 65557
+things stored by transaction: rc.getRoundNum() * 65557, location of soup found, location of a built refinery,
+location of trapped miner
+idea for many transactions: map id to meaning of location
+
+have each miner go in a straight line in a random direction. switch direction when you can no longer move in 
+this direction
 */
