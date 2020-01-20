@@ -103,7 +103,7 @@ public strictfp class RobotPlayer {
         } else { // otherwise generate a miner if round < 150
             if (rc.getRoundNum() < 150) {
                 for (Direction d : dir) {
-                    if (rc.canBuildRobot(RobotType.MINER, d) && minersBuilt < 10 && (rc.getRoundNum() < 100 || rc.getTeamSoup() > 200 + 70)) {
+                    if (rc.canBuildRobot(RobotType.MINER, d) && minersBuilt < 7 && (rc.getRoundNum() < 100 || rc.getTeamSoup() > 200 + 70)) {
                         rc.buildRobot(RobotType.MINER, d);
                         ++minersBuilt;
                         break;
