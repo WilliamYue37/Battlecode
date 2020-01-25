@@ -7,16 +7,37 @@ public strictfp class RobotPlayer {
     static RobotController rc;
     static int rows, cols;
     static boolean[][] vis;
-    static int row, col;
-    // static int turnCount;
-    static MapLocation goRefinery;
     static MapLocation hq;
+    static int birthday;
+
+    // miner
+    static MapLocation goRefinery;
     static boolean rush = false;
     static MapLocation rushLoc;
     static Direction randDir;
     static int randStepsTaken = 0;
+    static int stepsFromHQ = 0;
+    static boolean schoolBuilt = false;
+    static boolean schoolSent = false;
+    static MapLocation schoolLoc;
 
+    // hq
     static int minersBuilt = 0;
+
+    // landscaper
+    static int idx = 0;
+    static Direction[] moves = {Direction.NORTH, Direction.WEST, Direction.WEST, Direction.SOUTH, Direction.SOUTH,
+                                Direction.EAST, Direction.EAST};
+    static Direction[][] dig = {{Direction.NORTHEAST, Direction.SOUTHEAST},
+                                {Direction.NORTHWEST, Direction.NORTH, Direction.NORTHEAST, Direction.EAST},
+                                {Direction.NORTHWEST, Direction.NORTH, Direction.NORTHEAST},
+                                {Direction.SOUTHWEST, Direction.WEST, Direction.NORTHWEST, Direction.NORTH, Direction.NORTHEAST},
+                                {Direction.SOUTHWEST, Direction.WEST, Direction.NORTHWEST},
+                                {Direction.SOUTHEAST, Direction.SOUTH, Direction.SOUTHWEST, Direction.WEST, Direction.NORTHWEST},
+                                {Direction.SOUTHEAST, Direction.SOUTH, Direction.SOUTHWEST},
+                                {Direction.EAST, Direction.SOUTHEAST, Direction.SOUTH, Direction.SOUTHWEST}};
+    static Direction[] deposit = {Direction.SOUTH, Direction.SOUTH, Direction.EAST, Direction.EAST, Direction.NORTH,
+                                  Direction.NORTH, Direction.WEST, Direction.WEST};
 
     static Direction[] dir = {
         Direction.NORTH,
@@ -43,7 +64,6 @@ public strictfp class RobotPlayer {
         cols = rc.getMapWidth();
         vis = new boolean[rows][cols];
         randDir = randomDirection();
-        // turnCount = 0;
 
         RobotInfo[] nearbyRobots = rc.senseNearbyRobots(2);
         for (RobotInfo robot : nearbyRobots) {
@@ -53,8 +73,9 @@ public strictfp class RobotPlayer {
             }
         }
 
+        birthday = rc.getRoundNum();
+
         while (true) {
-            // ++turnCount;
             try {
                 switch (rc.getType()) {
                     case HQ:                 runHQ();                break;
@@ -80,14 +101,15 @@ public strictfp class RobotPlayer {
     static void runHQ() throws GameActionException {
         if (!rc.isReady()) return;
 
-        if (50 < rc.getRoundNum() && rc.getRoundNum() < 75) {
+        if (50 < rc.getRoundNum() && rc.getRoundNum() < 55) {
             int[] message = new int[7];
+            Arrays.fill(message, -1);
             message[0] = rc.getRoundNum() * 65557;
             message[2] = rc.getLocation().x * 64 + rc.getLocation().y;
-            blockchain(message, rc.getRoundNum() - 40);
+            blockchain(message, 2);
         }
 
-        RobotInfo[] nearbyRobots = rc.senseNearbyRobots(rc.getCurrentSensorRadiusSquared(), rc.getTeam().opponent());
+        RobotInfo[] nearbyRobots = rc.senseNearbyRobots(-1, rc.getTeam().opponent());
         RobotInfo nearestDrone = null;
 
         // find nearest drone
@@ -103,7 +125,7 @@ public strictfp class RobotPlayer {
         } else { // otherwise generate a miner if round < 150
             if (rc.getRoundNum() < 150) {
                 for (Direction d : dir) {
-                    if (rc.canBuildRobot(RobotType.MINER, d) && minersBuilt < 7 && (rc.getRoundNum() < 100 || rc.getTeamSoup() > 200 + 70)) {
+                    if (rc.canBuildRobot(RobotType.MINER, d) && minersBuilt < 5 && (rc.getRoundNum() < 100 || rc.getTeamSoup() > 200 + 70)) {
                         rc.buildRobot(RobotType.MINER, d);
                         ++minersBuilt;
                         break;
@@ -113,8 +135,55 @@ public strictfp class RobotPlayer {
         }
     }
 
-    // returns array of visible locations with soup sorted by proximity to current location
-    static MapLocation[] soupVision() throws GameActionException {
+    // returns location of closest reachable soup
+    static MapLocation soupVision() throws GameActionException {
+        // int side = (int) floor(sqrt(rc.getCurrentSensorRadiusSquared()));
+        // MapLocation rcLoc = rc.getLocation();
+
+        // int[][] mat = new int[side * 2 + 1][side * 2 + 1];
+        // for (int i = 0; i < mat.length; i++) Arrays.fill(mat[i], -1);
+        // mat[side][side] = rc.senseSoup(rcLoc) > 0 ? 1 : 0;
+
+        // ArrayList<MapLocation> bfs = new ArrayList<>();
+        // bfs.add(rcLoc);
+
+        // // ArrayList<MapLocation> soup = new ArrayList<>();
+        // MapLocation closestSoup = mat[side][side] == 0 ? null : rcLoc;
+        // if (mat[side][side] > 0) return rcLoc;
+
+        // while (!bfs.isEmpty()) {
+        //     ArrayList<MapLocation> temp = new ArrayList<>();
+        //     for (MapLocation loc : bfs) {
+        //         for (Direction d : dir) {
+        //             MapLocation go = loc.add(d);
+        //             if (valid(go) && rcLoc.distanceSquaredTo(go) <= rc.getCurrentSensorRadiusSquared()
+        //                 && abs(rc.senseElevation(loc) - rc.senseElevation(go)) <= 3
+        //                 && !rc.senseFlooding(go) && mat[rcLoc.y - go.y + side][go.x - rcLoc.x + side] == -1
+        //                 && !rc.isLocationOccupied(go)) {
+
+        //                 if (rc.senseSoup(go) > 0) {
+        //                     mat[rcLoc.y - go.y + side][go.x - rcLoc.x + side] = 1;
+                            
+        //                     if (closestSoup == null) {
+        //                         closestSoup = go;
+        //                         return closestSoup;
+        //                     }
+        //                 } else {
+        //                     mat[rcLoc.y - go.y + side][go.x - rcLoc.x + side] = 0;
+        //                 }
+
+        //                 temp.add(go);
+        //             }
+        //         }
+        //     }
+
+        //     bfs = temp;
+        // }
+
+        // // System.out.println("returned");
+
+        // return closestSoup;
+
         ArrayList<MapLocation> soup = new ArrayList<>();
 
         int base = (int) floor(sqrt(rc.getCurrentSensorRadiusSquared()));
@@ -138,332 +207,282 @@ public strictfp class RobotPlayer {
 
         if (ret.length > 0) vis = new boolean[rows][cols];
 
-        return ret;
+        return ret.length > 0 ? ret[0] : null;
     }
 
     static void runMiner() throws GameActionException {
-        System.out.println(1);
 
-        boolean printed = false;
+        if (rc.getRoundNum() == 190) vis = new boolean[rows][cols];
+
+        // System.out.println(1);
+
+        if (!rc.isReady()) return;
 
         unblock(); // reset vis if no available moves left
 
-        if (rc.getRoundNum() < 150 || rc.getRoundNum() > 200) { // leave the 150-200 range to let miners spread out
-            // if (200 < rc.getRoundNum() && rc.getRoundNum() < 250) { // build design schools during 200-250 range
-            //     for (Direction d : dir) {
-            //         if (rc.canBuildRobot(RobotType.DESIGN_SCHOOL, d)) {
-            //             rc.buildRobot(RobotType.DESIGN_SCHOOL, d);
-            //             return;
-            //         }
-            //     }
-            // }
+        MapLocation rcLoc = rc.getLocation();
 
-            // check for soup sites in blockchain
-            Transaction[] blockchain = rc.getBlock(rc.getRoundNum() - 1);
-            ArrayList<Transaction> oursList = new ArrayList<>();
-            for (Transaction t : blockchain) {
-                if (t.getMessage()[0] % 65557 == 0) {
-                    oursList.add(t);
-                }
-            }
-            Transaction[] ours = oursList.toArray(new Transaction[0]);
-            Arrays.sort(ours, new Comparator<Transaction>() {
-                public int compare(Transaction a, Transaction b) {
-                    MapLocation aLoc = new MapLocation(a.getMessage()[1] / 64, a.getMessage()[1] % 64);
-                    MapLocation bLoc = new MapLocation(b.getMessage()[1] / 64, b.getMessage()[1] % 64);
+        // build design school
+        if (birthday == 2 && !schoolBuilt && rc.getRoundNum() > 200) {
+            System.out.println(true);
 
-                    return rc.getLocation().distanceSquaredTo(aLoc) - rc.getLocation().distanceSquaredTo(bLoc);
+            if (rcLoc.equals(hq.add(Direction.EAST))) {
+                if (rc.canBuildRobot(RobotType.DESIGN_SCHOOL, Direction.EAST)) {
+                    rc.buildRobot(RobotType.DESIGN_SCHOOL, Direction.EAST);
+                    schoolBuilt = true;
+                    schoolLoc = hq.translate(2, 0);
+
+                    // Clock.yield();
+
+                    if (rc.canMove(Direction.NORTHEAST)) rc.move(Direction.NORTHEAST);
                 }
-            });
-            if (ours.length > 0) {
-                rush = true;
-                rushLoc = new MapLocation(ours[0].getMessage()[1] / 64, ours[0].getMessage()[1] % 64);
-                vis = new boolean[rows][cols];
+
+                return;
             }
 
-            Clock.yield();
+            Direction[] dirs = sortDirs(hq.add(Direction.EAST));
 
-            // look for visible refineries
-            RobotInfo[] nearbyRobots = rc.senseNearbyRobots(rc.getCurrentSensorRadiusSquared(), rc.getTeam());
-            ArrayList<MapLocation> refineriesList = new ArrayList<>();
-            for (RobotInfo robot : nearbyRobots) {
-                if (robot.type == RobotType.REFINERY || robot.type == RobotType.HQ) {
-                    refineriesList.add(robot.location);
+            for (Direction d : dirs) {
+                MapLocation go = rc.adjacentLocation(d);
+                
+                if (valid(go) && rc.canMove(d) && !rc.senseFlooding(go)) {
+                    rc.move(d);
+                    return;
                 }
             }
-            MapLocation[] refineries = refineriesList.toArray(new MapLocation[0]);
-            Arrays.sort(refineries, new Comparator<MapLocation>() {
-                public int compare(MapLocation a, MapLocation b) {
-                    return rc.getLocation().distanceSquaredTo(a) - rc.getLocation().distanceSquaredTo(b);
+        }
+
+        // check for soup sites in blockchain
+        Transaction[] blockchain = rc.getBlock(rc.getRoundNum() - 1);
+        for (Transaction t : blockchain) {
+            if (t.getMessage()[0] % 65557 == 0 && t.getMessage()[1] != -1) {
+                MapLocation soupMsg = new MapLocation(t.getMessage()[1] / 64, t.getMessage()[1] % 64);
+                if (rushLoc == null || rcLoc.distanceSquaredTo(soupMsg) < rcLoc.distanceSquaredTo(rushLoc)) {
+                    rush = true;
+                    rushLoc = soupMsg;
+                    vis = new boolean[rows][cols];
                 }
-            });
+            }
+        }
 
-            MapLocation[] soupVision = soupVision();
 
+        goRefinery = null;
 
-            // if soup is visible
-            if (soupVision.length > 0) {
-                // put soup location on blockchain if you're the first to find it
-                if (!rush) {
-                    int[] message = new int[7];
-                    message[0] = rc.getRoundNum() * 65557;
-                    message[1] = soupVision[0].x * 64 + soupVision[0].y;
-                    blockchain(message, 10);
+        // look for visible refineries
+        RobotInfo[] nearbyRobots = rc.senseNearbyRobots(-1, rc.getTeam());
+        for (RobotInfo robot : nearbyRobots) {
+            if (robot.type == RobotType.REFINERY || (robot.type == RobotType.HQ && rc.getRoundNum() < 190)) {
+                if (goRefinery == null || rcLoc.distanceSquaredTo(robot.location) < rcLoc.distanceSquaredTo(goRefinery)) {
+                    goRefinery = robot.location;
                 }
+            }
+        }
 
-                // go to refinery if full soup capacity
-                if (rc.getSoupCarrying() == RobotType.MINER.soupLimit) {
-                    // go to closest visible refinery
-                    if (refineries.length > 0) {
-                        goRefinery = refineries[0];
-                    } else { // build refinery if none visible
-                        if (randStepsTaken < 10) { // take 10 random steps before building refinery
-                            randStepsTaken++;
+        MapLocation soupVision = soupVision();
+        Clock.yield();
 
-                            ArrayList<Integer> shuffle = new ArrayList<>(Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7));
-                            Collections.shuffle(shuffle);
 
-                            for (Integer d : shuffle) {
-                                MapLocation go = rc.adjacentLocation(dir[d]);
-                                if (!valid(go)) continue;
+        // if soup is visible
+        if (soupVision != null) {
+            // put soup location on blockchain if you're the first to find it
+            if (!rush) {
+                int[] message = new int[7];
+                Arrays.fill(message, -1);
+                message[0] = rc.getRoundNum() * 65557;
+                message[1] = soupVision.x * 64 + soupVision.y;
+                blockchain(message, 3);
+            }
 
-                                if (rc.canMove(dir[d]) && !rc.senseFlooding(go) && !vis[rows - 1 - go.y][go.x]) {
-                                    rc.move(dir[d]);
-                                    vis[rows - 1 - go.y][go.x] = true;
-                                    System.out.println("moved");
-                                    printed = true;
+            // go to refinery if full soup capacity
+            if (rc.getSoupCarrying() == RobotType.MINER.soupLimit) {
+                // build refinery if can't see one
+                if (goRefinery == null) {
+                    if (randStepsTaken < 10) { // take 10 random steps before building refinery
+                        randStepsTaken++;
 
-                                    break;
+                        ArrayList<Integer> shuffle = new ArrayList<>(Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7));
+                        Collections.shuffle(shuffle);
+
+                        for (Integer d : shuffle) {
+                            MapLocation go = rc.adjacentLocation(dir[d]);
+                            if (!valid(go)) continue;
+
+                            if (rc.canMove(dir[d]) && !rc.senseFlooding(go) && !vis[rows - 1 - go.y][go.x]) { // && !vis[rows - 1 - go.y][go.x]
+                                if (rc.getRoundNum() > 190) {
+                                    if (rcLoc.distanceSquaredTo(hq) > 2) {
+                                        if (go.distanceSquaredTo(hq) <= 2) continue;
+                                    } else {
+                                        if (go.distanceSquaredTo(hq) <= rcLoc.distanceSquaredTo(hq)) continue;
+                                    }
                                 }
+
+                                rc.move(dir[d]);
+                                vis[rows - 1 - go.y][go.x] = true;
+
+                                break;
                             }
-                        } else {
-                            for (Direction d : dir) {
-                                if (rc.canBuildRobot(RobotType.REFINERY, d)) {
-                                    rc.buildRobot(RobotType.REFINERY, d);
-                                    goRefinery = rc.adjacentLocation(d);
+                        }
+                    } else {
+                        boolean built = false;
 
-                                    randStepsTaken = 0;
-                                }
+                        for (Direction d : dir) {
+                            if (rc.canBuildRobot(RobotType.REFINERY, d) && rcLoc.add(d).distanceSquaredTo(hq) > 2 && !rcLoc.add(d).equals(hq.add(Direction.EAST))) {
+                                rc.buildRobot(RobotType.REFINERY, d);
+                                goRefinery = rc.adjacentLocation(d);
+
+                                randStepsTaken = 0;
+
+                                built = true;
+                                break;
                             }
-
-                            // refine at hq if can't build refinery
-                            if (goRefinery == null) goRefinery = hq;
-                        }
-                    }
-                } else {
-                    MapLocation soupLocation = soupVision[0];
-
-                    Direction[] dirs = sortDirs(soupLocation);
-
-                    for (Direction d : dirs) {
-                        MapLocation go = rc.adjacentLocation(d);
-                        if (!valid(go)) continue;
-
-                        // mine soup if you can
-                        if (soupLocation.distanceSquaredTo(go) <= 2 && rc.canMineSoup(d)) {
-                            rc.mineSoup(d);
-                            System.out.println("mined");
-                            printed = true;
-                            break;
                         }
 
-                        // move towards soup
-                        if (rc.canMove(d) && !rc.senseFlooding(go)) {
-                            rc.move(d);
-                            System.out.println("moved");
-                            printed = true;
-                            break;
-                        }
-                    }
-                }
-            } else if (rush) { // stop rushing if you're at the rush location but no soup left
-                if (rc.getLocation().distanceSquaredTo(rushLoc) <= 2 && soupVision.length == 0) {
-                    rush = false;
-                    rushLoc = null;
-                } else { // move towards rush location
-                    Direction[] dirs = sortDirs(rushLoc);
-
-                    for (Direction d : dirs) {
-                        MapLocation go = rc.adjacentLocation(d);
-                        if (!valid(go)) continue;
-
-                        if (rc.canMove(d) && !rc.senseFlooding(go)) {
-                            rc.move(d);
-                            System.out.println("moved");
-                            printed = true;
-                            break;
-                        }
+                        if (built) Clock.yield();
                     }
                 }
             } else {
-                // go refine if you have soup but can't see soup
-                if (false) { // actually let's only go refine if we're full
-                    if (refineries.length > 0) {
-                        goRefinery = refineries[0];
-                    } else {
-                        for (Direction d : dir) {
-                            if (rc.canBuildRobot(RobotType.REFINERY, d)) {
-                                rc.buildRobot(RobotType.REFINERY, d);
-                                goRefinery = rc.adjacentLocation(d);
-                            }
-                        }
-                        
-                        if (goRefinery == null) goRefinery = hq;
-                    }
-                } else { // if no soup visible or on blockchain, go in a straight line in a random direction; repeat when reach wall
-                    MapLocation go = rc.adjacentLocation(randDir);
-                    ArrayList<Integer> shuffle = new ArrayList<>(Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7));
-                    Collections.shuffle(shuffle);
-                    for (Integer d : shuffle) {
-                        if (valid(go) && rc.canMove(randDir) && !rc.senseFlooding(go)) break;
-
-                        randDir = dir[d];
-                        go = rc.adjacentLocation(dir[d]);
-                    }
-
-                    if (valid(go) && rc.canMove(randDir) && !rc.senseFlooding(go)) {
-                        rc.move(randDir);
-                        System.out.println("moved");
-                        printed = true;
-                    }
-                }
-            }
-
-            if (goRefinery != null) { // move toward the nearest refinery if you need to refine
-                vis = new boolean[rows][cols];
-
-                Direction[] dirs = sortDirs(goRefinery);
+                Direction[] dirs = sortDirs(soupVision);
 
                 for (Direction d : dirs) {
                     MapLocation go = rc.adjacentLocation(d);
                     if (!valid(go)) continue;
 
-                    if (goRefinery.distanceSquaredTo(rc.getLocation()) <= 2 && rc.canDepositSoup(d)) {
-                        rc.depositSoup(d, rc.getSoupCarrying());
-                        goRefinery = null;
+                    // mine soup if you can
+                    if (soupVision.equals(go) && rc.canMineSoup(d)) {
+                        rc.mineSoup(d);
                         break;
                     }
 
+                    // move towards soup
                     if (rc.canMove(d) && !rc.senseFlooding(go) && !vis[rows - 1 - go.y][go.x]) {
+                        if (rc.getRoundNum() > 190) {
+                            if (rcLoc.distanceSquaredTo(hq) > 2) {
+                                if (go.distanceSquaredTo(hq) <= 2) continue;
+                            } else {
+                                if (go.distanceSquaredTo(hq) <= rcLoc.distanceSquaredTo(hq)) continue;
+                            }
+                        }
+
                         rc.move(d);
-                        System.out.println("moved");
-                        printed = true;
                         vis[rows - 1 - go.y][go.x] = true;
                         break;
                     }
                 }
             }
-        } else if (150 < rc.getRoundNum() && rc.getRoundNum() < 200) { // let miners spread out
+        } else if (rush) {
+            // stop rushing if you're at the rush location but no soup left
+            if (rcLoc.distanceSquaredTo(rushLoc) <= 2 && soupVision == null) {
+                rush = false;
+                rushLoc = null;
+            } else { // move towards rush location
+                Direction[] dirs = sortDirs(rushLoc);
+
+                for (Direction d : dirs) {
+                    MapLocation go = rc.adjacentLocation(d);
+                    if (!valid(go)) continue;
+
+                    if (rc.canMove(d) && !rc.senseFlooding(go) && !vis[rows - 1 - go.y][go.x]) {
+                        if (rc.getRoundNum() > 190) {
+                            if (rcLoc.distanceSquaredTo(hq) > 2) {
+                                if (go.distanceSquaredTo(hq) <= 2) continue;
+                            } else {
+                                if (go.distanceSquaredTo(hq) <= rcLoc.distanceSquaredTo(hq)) continue;
+                            }
+                        }
+
+                        rc.move(d);
+                        vis[rows - 1 - go.y][go.x] = true;
+                        break;
+                    }
+                }
+            }
+        } else {
+            // if no soup visible or on blockchain, go in a straight line in a random direction; repeat when reach wall
+            MapLocation go = rc.adjacentLocation(randDir);
             ArrayList<Integer> shuffle = new ArrayList<>(Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7));
             Collections.shuffle(shuffle);
-
             for (Integer d : shuffle) {
-                MapLocation go = rc.adjacentLocation(dir[d]);
-                if (!valid(go)) continue;
+                if (valid(go) && rc.canMove(randDir) && !rc.senseFlooding(go)) break;
 
-                if (rc.canMove(dir[d]) && !rc.senseFlooding(go) && !vis[rows - 1 - go.y][go.x]) {
-                    rc.move(dir[d]);
-                    System.out.println("moved");
-                    printed = true;
-                    vis[rows - 1 - go.y][go.x] = true;
+                randDir = dir[d];
+                go = rc.adjacentLocation(dir[d]);
+            }
 
-                    break;
+            if (valid(go) && rc.canMove(randDir) && !rc.senseFlooding(go)) {
+                boolean doMove = true;
+
+                if (rc.getRoundNum() > 190) {
+                    if (rcLoc.distanceSquaredTo(hq) > 2) {
+                        if (go.distanceSquaredTo(hq) <= 2) doMove = false;
+                    } else {
+                        if (go.distanceSquaredTo(hq) <= rcLoc.distanceSquaredTo(hq)) doMove = false;
+                    }
+                }
+                
+                if (doMove) {
+                    rc.move(randDir);
                 }
             }
         }
 
-        if (!printed) System.out.println("--------------------");
-    }
+        if (goRefinery != null) { // move toward the nearest refinery if you need to refine
+            Direction[] dirs = sortDirs(goRefinery);
 
-    static void runRefinery() throws GameActionException {
+            for (Direction d : dirs) {
+                MapLocation go = rc.adjacentLocation(d);
+                if (!valid(go)) continue;
 
-    }
+                if (goRefinery.equals(go) && rc.canDepositSoup(d)) {
+                    rc.depositSoup(d, rc.getSoupCarrying());
+                    goRefinery = null;
+                    break;
+                }
 
-    static void runVaporator() throws GameActionException {
+                if (rc.canMove(d) && !rc.senseFlooding(go) && !vis[rows - 1 - go.y][go.x]) { // && !vis[rows - 1 - go.y][go.x]
+                    if (rc.getRoundNum() > 190) {
+                        if (rcLoc.distanceSquaredTo(hq) > 2) {
+                            if (go.distanceSquaredTo(hq) <= 2) continue;
+                        } else {
+                            if (go.distanceSquaredTo(hq) <= rcLoc.distanceSquaredTo(hq)) continue;
+                        }
+                    }
 
+                    rc.move(d);
+                    vis[rows - 1 - go.y][go.x] = true;
+                    break;
+                }
+            }
+        }
     }
 
     static void runDesignSchool() throws GameActionException {
-        for (Direction d : dir) {
-            if (rc.canBuildRobot(RobotType.LANDSCAPER, d)) {
-                rc.buildRobot(RobotType.LANDSCAPER, d);
-                break;
-            }
+        if (rc.canBuildRobot(RobotType.LANDSCAPER, Direction.WEST)) {
+            rc.buildRobot(RobotType.LANDSCAPER, Direction.WEST);
         }
-    }
-
-    static void runFulfillmentCenter() throws GameActionException {
-        for (Direction dir : dir)
-            tryBuild(RobotType.DELIVERY_DRONE, dir);
     }
 
     static void runLandscaper() throws GameActionException {
-        
-    }
-
-    static void runDeliveryDrone() throws GameActionException {
-        Team enemy = rc.getTeam().opponent();
-        if (!rc.isCurrentlyHoldingUnit()) {
-            // See if there are any enemy robots within striking range (distance 1 from lumberjack's radius)
-            RobotInfo[] robots = rc.senseNearbyRobots(GameConstants.DELIVERY_DRONE_PICKUP_RADIUS_SQUARED, enemy);
-
-            if (robots.length > 0) {
-                // Pick up a first robot within range
-                rc.pickUpUnit(robots[0].getID());
+        if (idx >= moves.length || !rc.canMove(moves[idx])) {
+            if (rc.getDirtCarrying() > 0 && rc.isLocationOccupied(rc.getLocation().add(deposit[idx]))) {
+                if (rc.canDepositDirt(deposit[idx])) {
+                    rc.depositDirt(deposit[idx]);
+                }
+            } else {
+                for (Direction d : dig[idx]) {
+                    if (rc.canDigDirt(d)) {
+                        rc.digDirt(d);
+                        break;
+                    }
+                }
             }
         } else {
-            // No close robots, so search for robots within sight radius
-            tryMove(randomDirection());
+            rc.move(moves[idx++]);
         }
-    }
-
-    static void runNetGun() throws GameActionException {
-
     }
 
     static Direction randomDirection() {
         return dir[(int) (Math.random() * dir.length)];
     }
-
-    static RobotType randomSpawnedByMiner() {
-        return spawnedByMiner[(int) (Math.random() * spawnedByMiner.length)];
-    }
-
-    static boolean tryMove() throws GameActionException {
-        for (Direction dir : dir)
-            if (tryMove(dir))
-                return true;
-        return false;
-    }
-
-    static boolean tryMove(Direction dir) throws GameActionException {
-        if (rc.canMove(dir)) {
-            rc.move(dir);
-            return true;
-        } else return false;
-    }
-
-    static boolean tryBuild(RobotType type, Direction dir) throws GameActionException {
-        if (rc.canBuildRobot(type, dir)) {
-            rc.buildRobot(type, dir);
-            return true;
-        } else return false;
-    }
-
-    static boolean tryMine(Direction dir) throws GameActionException {
-        if (rc.isReady() && rc.canMineSoup(dir)) {
-            rc.mineSoup(dir);
-            return true;
-        } else return false;
-    }
-
-    static boolean tryRefine(Direction dir) throws GameActionException {
-        if (rc.isReady() && rc.canDepositSoup(dir)) {
-            rc.depositSoup(dir, rc.getSoupCarrying());
-            return true;
-        } else return false;
-    }
-
 
     static void blockchain(int[] message, int cost) throws GameActionException {
         if (rc.getTeamSoup() > 0) {
@@ -503,6 +522,23 @@ public strictfp class RobotPlayer {
         });
 
         return dirs;
+    }
+
+    static void runRefinery() throws GameActionException {
+
+    }
+
+    static void runVaporator() throws GameActionException {
+
+    }
+    static void runNetGun() throws GameActionException {
+
+    }
+    static void runDeliveryDrone() throws GameActionException {
+        
+    }
+    static void runFulfillmentCenter() throws GameActionException {
+        
     }
 }
 
@@ -558,4 +594,9 @@ current problems
 miners running into each other
 knowing where and when to build refineries and fulfillment centers
 
+
+next step
+have the first miner built build a design school and have the design school build landscapers
+have the landscapers stand around the hq
+block the blockchain
 */
