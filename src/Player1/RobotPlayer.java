@@ -10,6 +10,7 @@ public strictfp class RobotPlayer {
     static MapLocation hq;
     static boolean[][] vis;
     static int birthday;
+    static int round;
     static final int prime = 65557;
 
     // miner
@@ -24,6 +25,7 @@ public strictfp class RobotPlayer {
     static int grindRound = 120;
     static boolean centerBuilt = false;
     // static MapLocation centerLoc;
+    static int buildingIdx = 0;
 
     // hq
     static int minersBuilt = 0;
@@ -31,6 +33,7 @@ public strictfp class RobotPlayer {
 
     // design school
     static int landscapersBuilt = 0;
+    static int lastBuildRound = 0;
     static Direction buildIn;
 
     // landscaper
@@ -41,18 +44,27 @@ public strictfp class RobotPlayer {
     static int stepsToEdge = 0;
     static int numSpots = 0;
     static boolean cw;
+    static int idx2 = 0;
     static Direction[][] moves = {{Direction.NORTH, Direction.WEST, Direction.WEST, Direction.SOUTH, Direction.SOUTH,
                                   Direction.EAST, Direction.EAST, Direction.NORTH},
                                   {Direction.SOUTH, Direction.SOUTH, Direction.EAST, Direction.EAST, Direction.NORTH,
                                   Direction.NORTH, Direction.WEST, Direction.WEST}};
-    static Direction[][] dig = {{Direction.NORTHEAST, Direction.EAST, Direction.SOUTHEAST},
-                                {Direction.NORTHWEST, Direction.NORTH, Direction.NORTHEAST, Direction.EAST, Direction.SOUTHEAST},
-                                {Direction.NORTHWEST, Direction.NORTH, Direction.NORTHEAST},
-                                {Direction.SOUTHWEST, Direction.WEST, Direction.NORTHWEST, Direction.NORTH, Direction.NORTHEAST},
-                                {Direction.SOUTHWEST, Direction.WEST, Direction.NORTHWEST},
-                                {Direction.SOUTHEAST, Direction.SOUTH, Direction.SOUTHWEST, Direction.WEST, Direction.NORTHWEST},
-                                {Direction.SOUTHEAST, Direction.SOUTH, Direction.SOUTHWEST},
-                                {Direction.NORTHEAST, Direction.EAST, Direction.SOUTHEAST, Direction.SOUTH, Direction.SOUTHWEST}};
+    // static Direction[][] dig = {{Direction.NORTHEAST, Direction.EAST, Direction.SOUTHEAST},
+    //                             {Direction.NORTHWEST, Direction.NORTH, Direction.NORTHEAST, Direction.EAST, Direction.SOUTHEAST},
+    //                             {Direction.NORTHWEST, Direction.NORTH, Direction.NORTHEAST},
+    //                             {Direction.SOUTHWEST, Direction.WEST, Direction.NORTHWEST, Direction.NORTH, Direction.NORTHEAST},
+    //                             {Direction.SOUTHWEST, Direction.WEST, Direction.NORTHWEST},
+    //                             {Direction.SOUTHEAST, Direction.SOUTH, Direction.SOUTHWEST, Direction.WEST, Direction.NORTHWEST},
+    //                             {Direction.SOUTHEAST, Direction.SOUTH, Direction.SOUTHWEST},
+    //                             {Direction.NORTHEAST, Direction.EAST, Direction.SOUTHEAST, Direction.SOUTH, Direction.SOUTHWEST}};
+    static Direction[][] dig = {{Direction.WEST, Direction.NORTHEAST, Direction.EAST, Direction.SOUTHEAST},
+                                {Direction.SOUTHWEST, Direction.NORTHWEST, Direction.NORTH, Direction.NORTHEAST, Direction.EAST, Direction.SOUTHEAST},
+                                {Direction.SOUTH, Direction.NORTHWEST, Direction.NORTH, Direction.NORTHEAST},
+                                {Direction.SOUTHEAST, Direction.SOUTHWEST, Direction.WEST, Direction.NORTHWEST, Direction.NORTH, Direction.NORTHEAST},
+                                {Direction.EAST, Direction.SOUTHWEST, Direction.WEST, Direction.NORTHWEST},
+                                {Direction.NORTHEAST, Direction.SOUTHEAST, Direction.SOUTH, Direction.SOUTHWEST, Direction.WEST, Direction.NORTHWEST},
+                                {Direction.NORTH, Direction.SOUTHEAST, Direction.SOUTH, Direction.SOUTHWEST},
+                                {Direction.NORTHWEST, Direction.NORTHEAST, Direction.EAST, Direction.SOUTHEAST, Direction.SOUTH, Direction.SOUTHWEST}};
     static Direction[] digHQ = {Direction.WEST, Direction.SOUTHWEST, Direction.SOUTH, Direction.SOUTHEAST, 
                                 Direction.EAST, Direction.NORTHEAST, Direction.NORTH, Direction.NORTHWEST};
     static TreeMap<Direction, Integer> map = new TreeMap<>();
@@ -94,30 +106,42 @@ public strictfp class RobotPlayer {
     };
 
     // delivery drone
-    static TreeMap<Direction, Direction[]> normal = new TreeMap<>();
+    static boolean holdingEnemy = false, holdingLandscaper = false;
+    static int flyDir = 0;
+    static int minDist = 15, maxDist = 30;
+    static TreeSet<MapLocation> water = new TreeSet<>();
+    static TreeMap<Direction, Direction[][]> normal = new TreeMap<>();
     static {
-        Direction[] a1 = {Direction.EAST, Direction.NORTHEAST, Direction.SOUTHEAST};
+        Direction[][] a1 = {{Direction.EAST, Direction.NORTHEAST, Direction.SOUTHEAST}, 
+                            {Direction.WEST, Direction.SOUTHWEST, Direction.NORTHWEST}};
         normal.put(Direction.NORTH, a1);
 
-        Direction[] a2 = {Direction.SOUTHEAST, Direction.EAST, Direction.SOUTH};
+        Direction[][] a2 = {{Direction.SOUTHEAST, Direction.EAST, Direction.SOUTH}, 
+                            {Direction.NORTHWEST, Direction.WEST, Direction.NORTH}};
         normal.put(Direction.NORTHEAST, a2);
 
-        Direction[] a3 = {Direction.SOUTH, Direction.SOUTHEAST, Direction.SOUTHWEST};
+        Direction[][] a3 = {{Direction.SOUTH, Direction.SOUTHEAST, Direction.SOUTHWEST}, 
+                            {Direction.NORTH, Direction.NORTHWEST, Direction.NORTHEAST}};
         normal.put(Direction.EAST, a3);
 
-        Direction[] a4 = {Direction.SOUTHWEST, Direction.WEST, Direction.SOUTH};
+        Direction[][] a4 = {{Direction.SOUTHWEST, Direction.WEST, Direction.SOUTH}, 
+                            {Direction.NORTHEAST, Direction.EAST, Direction.NORTH}};
         normal.put(Direction.SOUTHEAST, a4);
 
-        Direction[] a5 = {Direction.WEST, Direction.SOUTHWEST, Direction.NORTHWEST};
+        Direction[][] a5 = {{Direction.WEST, Direction.SOUTHWEST, Direction.NORTHWEST}, 
+                            {Direction.EAST, Direction.NORTHEAST, Direction.SOUTHEAST}};
         normal.put(Direction.SOUTH, a5);
 
-        Direction[] a6 = {Direction.NORTHWEST, Direction.WEST, Direction.NORTH};
+        Direction[][] a6 = {{Direction.NORTHWEST, Direction.WEST, Direction.NORTH}, 
+                            {Direction.SOUTHEAST, Direction.EAST, Direction.SOUTH}};
         normal.put(Direction.SOUTHWEST, a6);
 
-        Direction[] a7 = {Direction.NORTH, Direction.NORTHWEST, Direction.NORTHEAST};
+        Direction[][] a7 = {{Direction.NORTH, Direction.NORTHWEST, Direction.NORTHEAST}, 
+                            {Direction.SOUTH, Direction.SOUTHEAST, Direction.SOUTHWEST}};
         normal.put(Direction.WEST, a7);
 
-        Direction[] a8 = {Direction.NORTHEAST, Direction.NORTH, Direction.EAST};
+        Direction[][] a8 = {{Direction.NORTHEAST, Direction.NORTH, Direction.EAST}, 
+                            {Direction.SOUTHWEST, Direction.SOUTH, Direction.WEST}};
         normal.put(Direction.NORTHWEST, a8);
     }
 
@@ -145,15 +169,17 @@ public strictfp class RobotPlayer {
 
         // landscaper
         if (rc.getType() == RobotType.LANDSCAPER) {
-            idx = map.get(hq.directionTo(rcLoc));
-
             birthday = 1;
-            nearbyRobots = rc.senseNearbyRobots(hq, 2, rc.getTeam());
+            nearbyRobots = rc.senseNearbyRobots(-1, rc.getTeam());
             for (RobotInfo robot : nearbyRobots) {
                 if (rc.senseRobot(robot.ID).type == RobotType.LANDSCAPER) {
                     ++birthday;
+                } else if (rc.senseRobot(robot.ID).type == RobotType.HQ) {
+                    hq = robot.location;
                 }
             }
+
+            idx = map.get(hq.directionTo(rcLoc));
 
             for (Direction d : dir) {
                 if (valid(hq.add(d))) ++numSpots;
@@ -180,6 +206,7 @@ public strictfp class RobotPlayer {
         }
 
         while (true) {
+            round = rc.getRoundNum();
             rcLoc = rc.getLocation();
 
             try {
@@ -229,16 +256,16 @@ public strictfp class RobotPlayer {
         // System.out.println(print);
         // // System.out.println(soupAmt);
 
-        int round = rc.getRoundNum();
+        // int round = rc.getRoundNum();
         // MapLocation rcLoc = rc.getLocation();
 
-        // if (50 < round && round < 55) {
-        //     int[] message = new int[7];
-        //     Arrays.fill(message, -1);
-        //     message[0] = round * prime;
-        //     message[2] = rcLoc.x * 64 + rcLoc.y;
-        //     blockchain(message, 1);
-        // }
+        if (50 < round && round < 55) {
+            int[] message = new int[7];
+            Arrays.fill(message, -1);
+            message[0] = round * prime;
+            message[2] = rcLoc.x * 64 + rcLoc.y;
+            blockchain(message, 1);
+        }
 
         RobotInfo[] nearbyRobots = rc.senseNearbyRobots(GameConstants.NET_GUN_SHOOT_RADIUS_SQUARED, rc.getTeam().opponent());
         RobotInfo nearestDrone = null;
@@ -254,36 +281,48 @@ public strictfp class RobotPlayer {
         if (nearestDrone != null) { // shoot nearest drone if it exists
             rc.shootUnit(nearestDrone.ID);
         } else { // otherwise make a miner
-            outer:
+            Direction bestDir = null;
+            int maxPotential = 0;
             for (Direction d : dir) {
                 if (minersBuilt < minerLimit + 1 && round >= grindRound) { // make miner that can build design school
                     if (!rc.canBuildRobot(RobotType.MINER, d)) continue;
 
-                    int numPotential = 0;
+                    int curPotential = 0;
                     for (Direction e : dig[map.get(d)]) {
                         MapLocation potentialBuilding = rcLoc.add(d).add(e);
 
                         if (valid(potentialBuilding) && !rc.senseFlooding(potentialBuilding) && abs(rc.senseElevation(potentialBuilding) - rc.senseElevation(rcLoc.add(d))) <= 3
                             && !rc.isLocationOccupied(potentialBuilding)) {
-                            ++numPotential;
+                            ++curPotential;
 
                             // rc.buildRobot(RobotType.MINER, d);
                             // minersBuilt = minerLimit + 1;
                             // break outer;
                         }
+
                     }
 
-                    if (numPotential >= 2) {
-                        rc.buildRobot(RobotType.MINER, d);
-                        minersBuilt = minerLimit + 1;
-                        break;
+                    if (curPotential > maxPotential) {
+                        maxPotential = curPotential;
+                        bestDir = d;
                     }
                 }
+            }
+
+            if (bestDir != null && rc.canBuildRobot(RobotType.MINER, bestDir) && maxPotential >= 2) {
+                rc.buildRobot(RobotType.MINER, bestDir);
+                minersBuilt = minerLimit + 1;
+
+                return;
+            }
+
+            for (Direction d : dir) {
                 if (rc.canBuildRobot(RobotType.MINER, d) && minersBuilt < minerLimit && (round < 100 || rc.getTeamSoup() > 200 + 70)) {
                     rc.buildRobot(RobotType.MINER, d);
                     ++minersBuilt;
                     break;
                 }
+                
             }
         }
     }
@@ -363,11 +402,11 @@ public strictfp class RobotPlayer {
     }
 
     static void runMiner() throws GameActionException {
-        int round = rc.getRoundNum();
+        // int round = rc.getRoundNum();
 
         if (round == grindRound - 8) vis = new boolean[rows][cols];
 
-        // System.out.println(1);
+        System.out.println(1);
 
         if (!rc.isReady()) return;
 
@@ -379,18 +418,24 @@ public strictfp class RobotPlayer {
         if (birthday >= grindRound && !schoolBuilt) {
             if (rc.getTeamSoup() < 500) return;
 
-            Direction cameFrom = hq.directionTo(rcLoc);
+            int cameFrom = map.get(hq.directionTo(rcLoc));
 
-            for (Direction d : dig[map.get(cameFrom)]) {
+            // for (Direction d : dig[map.get(cameFrom)]) {
+            while (buildingIdx < dig[cameFrom].length) {
+                Direction d = dig[cameFrom][buildingIdx++];
+
                 if (rc.canBuildRobot(RobotType.DESIGN_SCHOOL, d)) {
                     rc.buildRobot(RobotType.DESIGN_SCHOOL, d);
 
                     schoolBuilt = true;
+                    ++buildingIdx;
                     // schoolLoc = rcLoc.add(d);
 
                     break;
                 }
             }
+
+
 
             return;
         }
@@ -399,13 +444,16 @@ public strictfp class RobotPlayer {
         if (birthday >= grindRound && !centerBuilt) {
             if (rc.getTeamSoup() < 500) return;
 
-            Direction cameFrom = hq.directionTo(rcLoc);
+            int cameFrom = map.get(hq.directionTo(rcLoc));
 
-            for (Direction d : dig[map.get(cameFrom)]) {
+            // for (Direction d : dig[map.get(cameFrom)]) {
+            while (buildingIdx < dig[cameFrom].length) {
+                Direction d = dig[cameFrom][buildingIdx++];
                 if (rc.canBuildRobot(RobotType.FULFILLMENT_CENTER, d)) {
                     rc.buildRobot(RobotType.FULFILLMENT_CENTER, d);
 
                     centerBuilt = true;
+                    ++buildingIdx;
                     // centerLoc = rcLoc.add(d);
 
                     break;
@@ -599,25 +647,134 @@ public strictfp class RobotPlayer {
 
                 if (valid(go) && !rc.isLocationOccupied(go) && !rc.senseFlooding(go) && abs(rc.senseElevation(rcLoc) - rc.senseElevation(go)) <= 3 && go.distanceSquaredTo(hq) <= 2) {
                     buildIn = d;
-                    break;
+                    // break;
                 }
+
+                if (valid(hq.add(d))) ++numSpots;
             }
         }
+
+        System.out.println(numSpots);
         
-        if (rc.canBuildRobot(RobotType.LANDSCAPER, buildIn)) {
-            rc.buildRobot(RobotType.LANDSCAPER, buildIn);
-            ++landscapersBuilt;
-        } else if (numSpots == 8) {
+        if (landscapersBuilt < numSpots) {// && round > lastBuildRound + 10
+            if (rc.canBuildRobot(RobotType.LANDSCAPER, buildIn)) {
+                rc.buildRobot(RobotType.LANDSCAPER, buildIn);
+                ++landscapersBuilt;
+                lastBuildRound = round;
+
+                return;
+            }
+
             for (Direction d : dir) {
                 if (rc.canBuildRobot(RobotType.LANDSCAPER, d)) {
                     rc.buildRobot(RobotType.LANDSCAPER, d);
+                    ++landscapersBuilt;
+                    lastBuildRound = round;
+
+                    return;
                 }
             }
         }
+        // } else if (numSpots == 8) {
+        //     for (Direction d : dir) {
+        //         if (rc.canBuildRobot(RobotType.LANDSCAPER, d)) {
+        //             rc.buildRobot(RobotType.LANDSCAPER, d);
+        //         }
+        //     }
+
+        // if (landscapersBuilt < 8) {
+        //     for (Direction d : dir) {
+        //         if (rc.canBuildRobot(RobotType.LANDSCAPER, d)) {
+        //             rc.buildRobot(RobotType.LANDSCAPER, d);
+        //             ++landscapersBuilt;
+
+        //             return;
+        //         }
+        //     }
+        // }
     }
 
     static void runLandscaper() throws GameActionException {
-        // MapLocation rcLoc = rc.getLocation();
+        System.out.println('a');
+        if (rcLoc.distanceSquaredTo(hq) > 2) return;
+
+        if (numSpots == 8) {
+            System.out.println(idx2);
+            idx = map.get(hq.directionTo(rcLoc));
+
+            // System.out.println(idx);
+
+            if (idx2 % 3 == 2) {
+                if (rc.canMove(moves[0][idx % 8])) {
+                    rc.move(moves[0][idx % 8]);
+                    ++idx2;
+
+                    return;
+                } else if (rc.isLocationOccupied(rcLoc.add(moves[0][idx % 8]))) {
+                    ++idx2;
+                } else if (rc.senseElevation(rcLoc.add(moves[0][idx % 8])) < rc.senseElevation(rcLoc) - 3) {
+                    if (rc.getDirtCarrying() > 0) {
+                        if (rc.canDepositDirt(moves[0][idx % 8])) {
+                            rc.depositDirt(moves[0][idx % 8]);
+
+                            return;
+                        }
+                    } else {
+                        for (Direction d : dig[idx % 8]) {
+                            if (rc.canDigDirt(d)) {
+                                rc.digDirt(d);
+                                
+                                return;
+                            }
+                        }
+                    }
+                } else if (rc.senseElevation(rcLoc.add(moves[0][idx % 8])) > rc.senseElevation(rcLoc) + 3) {
+                    if (rc.getDirtCarrying() > 0) {
+                        for (Direction d : dig[idx % 8]) {
+                            if (rc.canDepositDirt(d)) {
+                                rc.depositDirt(d);
+
+                                return;
+                            }
+                        }
+                    } else {
+                        if (rc.canDigDirt(moves[0][idx % 8])) {
+                            rc.digDirt(moves[0][idx % 8]);
+
+                            return;
+                        }
+                    }
+                }
+            }
+
+            if (idx2 % 3 == 0) { // dig
+                for (Direction d : dig[idx % 8]) {
+                    if (rc.canDigDirt(d)) {
+                        rc.digDirt(d);
+                        ++idx2;
+
+                        return;
+                    }
+                }
+
+                if (rc.canMove(moves[0][idx % 8])) {
+                    rc.move(moves[0][idx % 8]);
+                    idx2 = 0;
+                }
+            } else if (idx2 % 3 == 1) { // deposit
+                if (rc.canDepositDirt(Direction.CENTER)) {
+                    rc.depositDirt(Direction.CENTER);
+                    ++idx2;
+
+                    return;
+                } else if (rc.canMove(moves[0][idx % 8])) {
+                    rc.move(moves[0][idx % 8]);
+                    idx2 = 0;
+                }
+            }
+
+            return;
+        }
 
         if (rc.canDigDirt(digHQ[idx % 8])) {
             rc.digDirt(digHQ[idx % 8]);
@@ -699,7 +856,7 @@ public strictfp class RobotPlayer {
             dirsFC = sortDirs(hq);
         }
 
-        if (dronesBuilt < 2) {
+        if (dronesBuilt < 2 || dronesBuilt < 20 && rc.getTeamSoup() > 1100) {
             for (int dd = 7; dd > -1; --dd) {
                 Direction d = dirsFC[dd];
 
@@ -714,39 +871,204 @@ public strictfp class RobotPlayer {
 
     static void runDeliveryDrone() throws GameActionException {
         if (hq == null) {
-            RobotInfo[] nearbyRobots = rc.senseNearbyRobots(-1, rc.getTeam());
-            for (RobotInfo robot : nearbyRobots) {
-                if (rc.senseRobot(robot.ID).type == RobotType.HQ) {
-                    hq = robot.location;
+            // RobotInfo[] nearbyRobots = rc.senseNearbyRobots(-1, rc.getTeam());
+            // for (RobotInfo robot : nearbyRobots) {
+            //     if (rc.senseRobot(robot.ID).type == RobotType.HQ) {
+            //         hq = robot.location;
+            //         break;
+            //     }
+            // }
+        }
+
+        int hqIdx = 51;
+        while (hq == null && hqIdx < 55) {
+            Transaction[] blockchain = rc.getBlock(hqIdx);
+            for (Transaction t : blockchain) {
+                int[] message = t.getMessage();
+
+                if (message[0] % prime == 0 && message[0] > 0 && message[2] != -1) {
+                    hq = new MapLocation(message[2] / 64, message[2] % 64);
                     break;
+                }
+                
+            }
+
+
+            ++hqIdx;
+        }
+
+        System.out.println(holdingEnemy + " " + holdingLandscaper);
+
+        int dist = (rcLoc.x - hq.x) * (rcLoc.x - hq.x) + (rcLoc.y - hq.y) * (rcLoc.y - hq.y);
+
+        int side = (int) floor(sqrt(rc.getCurrentSensorRadiusSquared()));
+        for (int i = -side; i <= side; i++) {
+            int height = (int) floor(sqrt(rc.getCurrentSensorRadiusSquared() - i * i));
+            for (int j = -height; j <= height; j++) {
+                MapLocation search = new MapLocation(rcLoc.x + i, rcLoc.y + j);
+                if (valid(search) && rc.senseFlooding(search)) {
+                    water.add(search);
                 }
             }
         }
 
-        int dist = rcLoc.distanceSquaredTo(hq);
-        if (dist <= 15 || dist >= 30) {
+        if (!rc.isReady()) return;
+
+        if (rc.getTeamSoup() > 1000) {
+            minDist = 4;
+            maxDist = 15;
+        }
+
+        if (minDist == 4) {
+
+            droneUnblock();
+            if (rcLoc.distanceSquaredTo(hq) == 8) return;
+            if (rcLoc.distanceSquaredTo(hq) > 5) {
+                Direction[] dirs = sortDircs(hq);
+                for (Direction d : dirs) {
+                    MapLocation go = rcLoc.add(d);
+                    if (rc.canMove(d) && !vis[rows - 1 - go.y][go.x]) {
+                        rc.move(d);
+                        vis[rows - 1 - go.y][go.x] = true;
+                        break;
+                    }
+                }
+            }
+
+            return;
+        }
+
+        if (holdingEnemy) {
+            if (water.size() > 0) {
+                MapLocation closestWater = null;
+                for (MapLocation loc : water) {
+                    if (closestWater == null || rcLoc.distanceSquaredTo(loc) < rcLoc.distanceSquaredTo(closestWater)) {
+                        closestWater = loc;
+                    }
+                }
+
+                Direction[] dirs = sortDirs(closestWater);
+                for (Direction d : dirs) {
+                    if (rc.canDropUnit(d)) {
+                        rc.dropUnit(d);
+                        holdingEnemy = false;
+
+                        return;
+                    }
+
+                    if (rc.canMove(d)) {
+                        rc.move(d);
+
+                        return;
+                    }
+                }
+            }
+            // do case where no water visible
+        } else if (holdingLandscaper) {
+            Direction[] dirs = sortDirs(hq);
+            for (Direction d : dirs) {
+                MapLocation go = rcLoc.add(d);
+                if (!valid(go)) continue;
+
+                if (go.distanceSquaredTo(hq) <= 2 && rc.canDropUnit(d)) {
+                    rc.dropUnit(d);
+                    holdingLandscaper = false;
+
+                    return;
+                }
+
+                if (rc.canMove(d)) {
+                    rc.move(d);
+
+                    return;
+                }
+            }
+        }
+
+        RobotInfo[] nearbyRobots = rc.senseNearbyRobots();
+        RobotInfo closestEnemy = null, closestLandscaper = null;
+        for (RobotInfo robot : nearbyRobots) {
+            if (rc.senseRobot(robot.ID).team == rc.getTeam().opponent()) {
+                if (closestEnemy == null || rcLoc.distanceSquaredTo(robot.location) < rcLoc.distanceSquaredTo(closestEnemy.location)) {
+                    closestEnemy = robot;
+                }
+            } else if (rc.senseRobot(robot.ID).type == RobotType.LANDSCAPER) {
+                if (robot.location.distanceSquaredTo(hq) > 2 && (closestLandscaper == null || rcLoc.distanceSquaredTo(robot.location) < rcLoc.distanceSquaredTo(closestLandscaper.location))) {
+                    closestLandscaper = robot;
+                }
+            }
+        }
+
+        if (closestEnemy != null) {
+            if (rc.canPickUpUnit(closestEnemy.ID)) {
+                rc.pickUpUnit(closestEnemy.ID);
+                holdingEnemy = true;
+            } else {
+                Direction[] dirs = sortDirs(closestEnemy.location);
+                for (Direction d : dirs) {
+                    if (rc.canMove(d)) {
+                        rc.move(d);
+
+                        break;
+                    }
+                }
+            }
+
+            return;
+        } else if (closestLandscaper != null) {
+            if (rc.canPickUpUnit(closestLandscaper.ID)) {
+                rc.pickUpUnit(closestLandscaper.ID);
+                holdingLandscaper = true;
+
+                return;
+            } else {
+                Direction[] dirs = sortDirs(closestLandscaper.location);
+                for (Direction d : dirs) {
+                    if (rc.canMove(d)) {
+                        rc.move(d);
+
+                        return;
+                    }
+                }
+            }
+        } else if (dist <= minDist || dist >= maxDist) {
             for (Direction d : dir) {
                 MapLocation go = rcLoc.add(d);
                 int goDist = go.distanceSquaredTo(hq);
 
-                if (valid(go) && min(abs(goDist - 15), abs(goDist - 30)) < min(abs(dist - 15), abs(dist - 30)) && rc.canMove(d)) {
+                if (valid(go) && (min(abs(goDist - minDist), abs(goDist - maxDist)) < min(abs(dist - minDist), abs(dist - maxDist)) || minDist < goDist && goDist < maxDist)  && rc.canMove(d)) {
                     rc.move(d);
+
                     return;
                 }
             }
         } else {
             Direction cameFrom = hq.directionTo(rcLoc);
-            for (Direction d : normal.get(cameFrom)) {
+            for (Direction d : normal.get(cameFrom)[flyDir % 2]) {
                 MapLocation go = rcLoc.add(d);
                 int goDist = go.distanceSquaredTo(hq);
 
-                if (valid(go) && rc.canMove(d) && 15 < goDist && goDist < 30) {
+                if (valid(go) && rc.canMove(d) && minDist < goDist && goDist < maxDist) {
                     rc.move(d);
 
-                    break;
+                    return;
                 }
             }
+
+            ++flyDir;
+            for (Direction d : normal.get(cameFrom)[flyDir % 2]) {
+                MapLocation go = rcLoc.add(d);
+                int goDist = go.distanceSquaredTo(hq);
+
+                if (valid(go) && rc.canMove(d) && minDist < goDist && goDist < maxDist) {
+                    rc.move(d);
+
+                    return;
+                }
+            }
+
         }
+
     }
 
     static Direction randomDirection() {
